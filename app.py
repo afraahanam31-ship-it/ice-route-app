@@ -34,7 +34,28 @@ col4.metric("Risk Assessment", "MODERATE" if time_hour > 10 else "LOW")
 # Base Map Setup
 m = folium.Map(location=[-64.5, -63.0], zoom_start=7, tiles="CartoDB dark_matter")
 
-# Moving Sea-Ice Concentration Zone
+# 1. Fixed Start Location (Departure Port)
+folium.Marker(
+    location=[-65.0, -64.0],
+    popup="Start: Departure Port",
+    icon=folium.Icon(color="gray", icon="play", prefix="fa")
+).add_to(m)
+
+# 2. Fixed Final Destination (Target Research Station)
+folium.Marker(
+    location=[-63.8, -61.5],
+    popup="Destination: Rothera Research Station",
+    icon=folium.Icon(color="red", icon="flag", prefix="fa")
+).add_to(m)
+
+# 3. Dynamic Moving Vessel Marker (Position updates with time_hour)
+folium.Marker(
+    location=[vessel_lat, vessel_lon],
+    popup=f"Vessel Current Position (+{time_hour}h)",
+    icon=folium.Icon(color="blue", icon="ship", prefix="fa")
+).add_to(m)
+
+# 4. Dynamic Moving Sea-Ice Field
 ice_polygon = [
     [ice_drift_lat, ice_drift_lon],
     [ice_drift_lat + 0.3, ice_drift_lon + 0.2],
@@ -47,22 +68,15 @@ folium.Polygon(
     fill=True,
     fill_color="cyan",
     fill_opacity=0.4,
-    popup=f"Dynamic Ice Field at +{time_hour}h"
+    popup=f"Dynamic Ice Field (+{time_hour}h)"
 ).add_to(m)
 
-# Moving Vessel Marker
-folium.Marker(
-    location=[vessel_lat, vessel_lon],
-    popup=f"Vessel Position (+{time_hour}h)",
-    icon=folium.Icon(color="blue", icon="ship", prefix="fa")
-).add_to(m)
-
-# Planned Safe Route Corridor
+# 5. Full Optimized Route Corridor (From Start to Destination)
 safe_route = [
-    [-65.0, -64.0],
-    [-64.5, -63.5],
-    [ice_drift_lat - 0.3, ice_drift_lon - 0.2],  # Route adjusts relative to ice
-    [-63.8, -61.5]
+    [-65.0, -64.0],                             # Start
+    [-64.5, -63.5],                             # Waypoint 1
+    [ice_drift_lat - 0.3, ice_drift_lon - 0.2],    # Dynamic bypass point around moving ice
+    [-63.8, -61.5]                              # Destination
 ]
 folium.PolyLine(safe_route, color="lime", weight=4, opacity=0.8, popup="AI Safe Corridor").add_to(m)
 
