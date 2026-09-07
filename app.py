@@ -15,62 +15,78 @@ vessel_speed = st.sidebar.slider("Vessel Speed (knots)", 5, 20, 12)
 st.sidebar.subheader("🕒 Satellite Time Progression")
 time_hour = st.sidebar.slider("Simulate Hours Elapsed (0h to 24h)", 0, 24, 0, step=2)
 
-# Dynamic Ice Coordinates based on Time
-ice_drift_lat = -64.2 + (time_hour * 0.015)
-ice_drift_lon = -62.5 + (time_hour * 0.035)
+# 1. Dynamic Ice Drift (Drifts east/northeast at a realistic pace)
+ice_drift_lat = -64.0 + (time_hour * 0.01)
+ice_drift_lon = -62.0 + (time_hour * 0.02)
 
-# Calibrated Vessel Position (Interpolates directly along the route points)
-fraction = time_hour / 24.0
-vessel_lat = -65.0 + fraction * (-63.8 - (-65.0))
-vessel_lon = -64.0 + fraction * (-61.5 - (-64.0))
-
-# Proximity Check (Simulated proximity between ship and ice field)
-near_ice = 8 <= time_hour <= 16
-
-# Top Warning System
-if near_ice:
-    st.error("⚠️ **ICE HAZARD ALERT:** Vessel entering high-density iceberg drift zone! AI rerouting active.")
-else:
-    st.success("✅ **ROUTE CLEAR:** Safe distance maintained from primary iceberg fields.")
-
-# Display Metrics
-col1, col2, col3, col4 = st.columns(4)
-col1.metric("Current Time Window", f"+{time_hour} Hours")
-col2.metric("Vessel Coordinates", f"{round(vessel_lat, 2)}°S, {round(vessel_lon, 2)}°W")
-col3.metric("Ice Drift Velocity", "1.2 knots NE")
-col4.metric("Risk Assessment", "HIGH (ICE BERGS)" if near_ice else "LOW")
-
-# Base Map Setup
-m = folium.Map(location=[-64.5, -63.0], zoom_start=7, tiles="OpenStreetMap")
-
-# 1. Fixed Start Location
-folium.Marker(
-    location=[-65.0, -64.0],
-    popup="Start: Departure Port",
-    icon=folium.Icon(color="gray", icon="play", prefix="fa")
-).add_to(m)
-
-# 2. Fixed Final Destination
-folium.Marker(
-    location=[-63.8, -61.5],
-    popup="Destination: Rothera Research Station",
-    icon=folium.Icon(color="red", icon="flag", prefix="fa")
-).add_to(m)
-
-# 3. Dynamic Moving Vessel Marker
-folium.Marker(
-    location=[vessel_lat, vessel_lon],
-    popup=f"Vessel Position (+{time_hour}h)",
-    icon=folium.Icon(color="blue", icon="ship", prefix="fa")
-).add_to(m)
-
-# 4. Iceberg Hazard Zone (Cyan Polygon with Red Warning Border)
+# 2. Ice Hazard Polygon Definition
 ice_polygon = [
     [ice_drift_lat, ice_drift_lon],
     [ice_drift_lat + 0.3, ice_drift_lon + 0.2],
     [ice_drift_lat + 0.2, ice_drift_lon + 0.5],
     [ice_drift_lat - 0.1, ice_drift_lon + 0.3]
 ]
+
+# 3. Safe Corridor Waypoints (Clear detour around the ice polygon west side)
+detour_lat = ice_drift_lat - 0.2
+detour_lon = ice_drift_lon - 0.6
+
+start_pos = [-65.0, -64.0]
+waypoint_1 = [-64.5, -63.5]
+waypoint_2 = [detour_lat, detour_lon]
+destination_pos = [-63.8, -61.5]
+
+safe_route = [start_pos, waypoint_1, waypoint_2, destination_pos]
+
+# 4. Calibrated Vessel Interpolation along the Safe Corridor
+fraction = time_hour / 24.0
+if fraction <= 0.33:
+    sub_f = fraction / 0.33
+    vessel_lat = start_pos[0] + sub_f * (waypoint_1[0] - start_pos[0])
+    vessel_lon = start_pos[1] + sub_f * (waypoint_1[1] - start_pos[1])
+elif fraction <= 0.66:
+    sub_f = (fraction - 0.33) / 0.33
+    vessel_lat = waypoint_1[0] + sub_f * (waypoint_2[0] - waypoint_1[0])
+    vessel_lon = waypoint_1[1] + sub_f * (waypoint_2[1] - waypoint_1[1])
+else:
+    sub_f = (fraction - 0.66) / 0.34
+    vessel_lat = waypoint_2[0] + sub_f * (destination_pos[0] - waypoint_2[0])
+    vessel_lon = waypoint_2[1] + sub_f * (destination_pos[1] - waypoint_2[1])
+
+# Proximity Check
+near_ice = 8 <= time_hour <= 18
+
+# Alert Banner
+if near_ice:
+    st.error("⚠️ **ICE HAZARD ALERT:** Iceberg field ahead. AI active detour route enforced.")
+else:
+    st.success("✅ **ROUTE CLEAR:** Safe clearance distance maintained from ice zone.")
+
+# Top Metrics
+col1, col2, col3, col4 = st.columns(4)
+col1.metric("Current Time Window", f"+{time_hour} Hours")
+col2.metric("Vessel Coordinates", f"{round(vessel_lat, 2)}°S, {round(vessel_lon, 2)}°W")
+col3.metric("Ice Drift Velocity", "1.2 knots NE")
+col4.metric("Risk Assessment", "MODERATE DETOUR" if near_ice else "LOW")
+
+# Map Setup
+m = folium.Map(location=[-64.3, -63.0], zoom_start=7, tiles="OpenStreetMap")
+
+# Start Marker
+folium.Marker(
+    location=start_pos,
+    popup="Start: Departure Port",
+    icon=folium.Icon(color="gray", icon="play", prefix="fa")
+).add_to(m)
+
+# Destination Marker
+folium.Marker(
+    location=destination_pos,
+    popup="Destination: Rothera Research Station",
+    icon=folium.Icon(color="red", icon="flag", prefix="fa")
+).add_to(m)
+
+# Ice Polygon
 folium.Polygon(
     locations=ice_polygon,
     color="red",
@@ -81,14 +97,15 @@ folium.Polygon(
     popup=f"⚠️ DANGER: Iceberg Concentration Zone (+{time_hour}h)"
 ).add_to(m)
 
-# 5. Dynamic AI Safe Route Corridor
-safe_route = [
-    [-65.0, -64.0],
-    [-64.5, -63.5],
-    [ice_drift_lat - 0.3, ice_drift_lon - 0.2],
-    [-63.8, -61.5]
-]
+# Green Safe Route Line
 folium.PolyLine(safe_route, color="green", weight=5, opacity=0.8, popup="AI Safe Corridor").add_to(m)
+
+# Moving Ship Marker
+folium.Marker(
+    location=[vessel_lat, vessel_lon],
+    popup=f"Vessel Position (+{time_hour}h)",
+    icon=folium.Icon(color="blue", icon="ship", prefix="fa")
+).add_to(m)
 
 # Render Map
 st_folium(m, width="100%", height=500)
